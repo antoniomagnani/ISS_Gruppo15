@@ -258,7 +258,7 @@ BehaviorOf drone {
 	state droneCheckCommands onException droneError
 		showMsg("=== Controllo comandi ricevuti dall'unità operativa ===")
 
-		onMessage? stopMissionFromUser goToState droneManageCommands // Da controllare 
+		onMessage? stopMissionFromUser goToState droneManageCommands
 		onMessage? decSpeed goToState droneManageCommands
 		onMessage? incSpeed goToState droneManageCommands
 		
@@ -267,7 +267,7 @@ BehaviorOf drone {
 	
 	state droneManageCommands onException droneError
 	
-		onMessage stopMissionFromUser transitTo droneStop // Da controllare 
+		onMessage stopMissionFromUser transitTo droneStop  
 		onMessage decSpeed transitTo droneDecSpeed
 		onMessage incSpeed transitTo droneIncSpeed
 	
@@ -287,7 +287,7 @@ BehaviorOf drone {
 	
 	/*
 	 * 	Stato di arrivo nel caso il carburante scenda sotto la soglia minima.
-	 * 	Invia un messaggio di stop al server e agli smart devices
+	 * 	Invia un messaggio di stop al server, a droneSensor e agli smart devices
 	 */
 	state droneAutomaticStop
 		showMsg("=== CARBURANTE SOTTO LA SOGLIA MINIMA. ARRESTO MISSIONE ===")
@@ -301,8 +301,6 @@ BehaviorOf drone {
 	// Il drone:
 	//		- Invia il segnale di stop a droneSensor
 	//		- Invia il segnale di stop agli Smart Device
-	// TODO: Implementare controllo per stream e cazzi vari
-	//	
 	state droneStop
 		showMsg("=== RICEVUTO COMANDO DI FINE MISSIONE. ARRESTO ===")
 		// Invio segnale di stop al droneSensor
