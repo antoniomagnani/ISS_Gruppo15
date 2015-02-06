@@ -4,10 +4,10 @@
 	<classpathentry kind="src" path="src-gen"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/it.unibo.iss.group15.model.implementations"/>
 	<classpathentry combineaccessrules="false" kind="src" path="/it.unibo.iss.group15.model.interfaces"/>
-	<classpathentry kind="lib" path="libs/it.unibo.envBaseAwt_1.6.6.jar"/>
-	<classpathentry kind="lib" path="libs/it.unibo.interfaces_1.6.12.jar"/>
-	<classpathentry kind="lib" path="libs/it.unibo.tuprolog_1.0.1.jar"/>
-	<classpathentry kind="lib" path="libs/org.eclipse.xtext.xbase.lib_2.2.1.v201112130541.jar"/>
-	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER"/>
+	<classpathentry exported="true" kind="lib" path="libs/it.unibo.envBaseAwt_1.6.6.jar"/>
+	<classpathentry exported="true" kind="lib" path="libs/it.unibo.interfaces_1.6.12.jar"/>
+	<classpathentry exported="true" kind="lib" path="libs/it.unibo.tuprolog_1.0.1.jar"/>
+	<classpathentry exported="true" kind="lib" path="libs/org.eclipse.xtext.xbase.lib_2.2.1.v201112130541.jar"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/jre7"/>
 	<classpathentry kind="output" path="bin"/>
 </classpath>
