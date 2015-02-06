@@ -1,0 +1,111 @@
+ContactSystem SmartDeviceSystem spaceUpdater [host="192.168.43.129" port=8070];
+
+//1 - Definition of the Contexts 
+Context ctxSmartdevice;
+
+//2 - Definition of the (initial) system components
+Subject smartDevice context ctxSmartdevice;
+Subject droneSender external;
+
+//3 - Definition of the message types
+
+//Signal inviata dal drone quando una missione inizia
+Signal smartMissionStart;
+//Signal contenente lo stato del drone (carburante, coordinate, ecc.)
+Signal smartActualStatus;
+//Signal inviata dal drone quando una missione viene stoppata dalla Drone Control Dashboard
+Signal smartMissionUserStop;
+//Signal inviata dal drone quando il carburante è troppo basso per proseguire
+Signal smartMissionFuelStop;
+
+
+
+//4 - Definition of high-level communication operations
+smartSenseStart: smartDevice sense smartMissionStart;
+smartSenseState: smartDevice sense smartActualStatus;
+smartSenseUserStop: smartDevice sense smartMissionUserStop;
+smartSenseFuelStop: smartDevice sense smartMissionFuelStop;
+
+//5 - Definition of behavior
+BehaviorOf smartDevice{
+	
+	var model.abstracts.messages.common.ICommon droneStart
+	var model.abstracts.messages.common.ICommon droneStop
+	var model.abstracts.messages.data.IStatus droneState
+	
+	// Variabili
+	var model.abstracts.messages.data.IStatusElement iSpeed
+	var model.abstracts.messages.data.IStatusElement iFuel
+	var model.abstracts.messages.data.IPosition iPosition
+	var model.abstracts.messages.data.IStatusElement iDistance
+	
+	//Invia una notifica su schermo per informare l'utente che il drone è partito
+	action void sendNotification()
+	//Aggiorna la dashboard ogni volta che riceviamo un nuova informazione riguardo al drone
+	action void refreshDashboard(double d_speed, double d_fuel, double d_distance, double d_pos_latitude, double d_pos_longitude, double d_pos_altitude)
+	//Stoppa la dashboard dopo aver ricevuto il messaggio di stop dalla DroneControlDashboard
+	action void stopUserDashboard()
+	//Stoppa la dashboard dopo aver ricevuto il messaggio di esaurimento carburante
+	action void stopFuelDashboard()
+
+	//SD = Smart Device
+
+	//Attende per un messaggio di avvio dal drone (DroneStart)
+	state SDinit initial onException errorLog
+		showMsg("DroneMonitor avviato")
+		onMessage smartMissionStart transitTo SDreceivedStart
+	endstate
+
+	//Alla ricezione di un messaggio DroneStart, viene inviata una notifica all'utente
+		state SDreceivedStart onException errorLog
+		showMsg("Il drone è avviato")
+		call sendNotification()
+		goToState SDwaitForData
+	endstate
+	
+	//Attende per qualche messaggio dal drone (state oppure stop)
+	state SDwaitForData onException errorLog
+		showMsg("In attesa di messaggi dal drone")
+		onMessage smartActualStatus transitTo SDshowDroneState
+		onMessage smartMissionUserStop transitTo SDUserStop
+		onMessage smartMissionFuelStop transitTo SDFuelStop
+	endstate
+	
+	state SDUserStop onException errorLog
+		showMsg("Stop ricevuto dall'utente")
+		call stopUserDashboard();
+		goToState SDstop
+	endstate
+	
+	state SDFuelStop onException errorLog
+		showMsg("Carburante esaurito")
+		call stopFuelDashboard();
+		goToState SDstop
+	endstate
+	
+	//Elabora e mostra lo stato del drone, poi ritorna allo stato SDwaitForData (loop)
+	state SDshowDroneState onException errorLog
+		showMsg("Nuovo messaggio di stato dal drone ricevuto:")
+		// Get di IState dal messaggio in input
+		set droneState 	= 	call model.concretes.messages.data.Status.readMessage(code.curInputMsgContent)
+		//Set interfacce
+		set iSpeed 		= call droneState.getSpeed()
+ 		set iFuel 		= call droneState.getFuel()
+ 		set iPosition 	= call droneState.getPosition()
+ 		set iDistance 	= call droneState.getDistance()
+		call refreshDashboard(call iSpeed.getValue(), call iFuel.getValue(), call iDistance.getValue(), call iPosition.getLatitude(), call iPosition.getLongitude(), call iPosition.getAltitude())
+		goToState SDwaitForData
+	endstate
+	
+	state SDstop onException errorLog
+		showMsg("Chiusura SD")
+		transitToEnd
+	endstate
+	
+	//Mostra Errori
+	state errorLog
+	showMsg("Errore: " + code.curException)
+	transitToEnd
+	endstate
+
+}

@@ -1,0 +1,399 @@
+ContactSystem OperativeUnitSystem spaceUpdater [host="localhost" port=8070];
+
+Context operativeUnitCtx -o;
+
+// ==== SUBJECTS =====
+
+Subject cmdDisplay context operativeUnitCtx -w;
+Subject gaugeDisplay context operativeUnitCtx -w;
+Subject server context operativeUnitCtx -w;
+
+//subject esterno
+Subject drone external;
+
+//==== MESSAGES ====
+
+// Server-Drone
+Dispatch droneActualData;
+Dispatch fuelStopMission;
+Dispatch openStreamRequest;
+
+// Server-CmdDisplay-Gauge
+Dispatch stopMissionFromUser;
+
+//tipi messaggi relativi alla velocità
+Invitation setSpeed;
+Dispatch incSpeed;
+Dispatch decSpeed;
+
+//tipi messaggi relativi alla missione
+Dispatch startMission;
+
+//tipi messaggi utilizzati dal repository per info riguardanti foto stato e trasferimento foto
+//Dispatch sendPackage;
+//Dispatch sendPhoto;
+//tipi messaggi per comunicazione interna dei subject
+//Dispatch currentFuel;
+//Dispatch currentState;
+
+// ======= MESSAGES =======
+
+// SERVER
+
+//	Server riceve lo stato attuale e il nome della foto dal drone
+serverReceiveDroneStatus: server serve droneActualData support=TCP[host="localhost" port=8010];
+
+//	Server riceve da CmdDisplay il comando di stop dall'utente
+serverReceiveStop: server serve stopMissionFromUser;
+
+//	Server riceve il comando di stop per fuel sotto il livello minimo dal drone
+serverReceiveFuelStop: server serve fuelStopMission support=TCP[host="localhost" port=8010];
+
+//	Server invia la richiesta per l'apertura dello stream per la foto al drone
+serverSendOpenStreamRequest: server forward openStreamRequest to drone;
+//drone riceve la richiesta di apertura di uno stream da parte della centrale operativa
+//al fine di inviare la foto
+drone_PhotoStreamRequest: drone serve openStreamRequest	support=TCP [host="localhost" port=8090];
+
+//	Server invia lo stato del drone a GaugeDisplay
+serverSendDroneStatusToGauge: server forward droneActualData to gaugeDisplay;
+
+//	Server invia il comando di stop per fuel a CommandDisplay
+serverSendFuelStopToCmd: server forward fuelStopMission to cmdDisplay;
+
+//	Server invia il comando di stop per fuel a GaugeDisplay
+serverSendFuelStopToGauge: server forward fuelStopMission to gaugeDisplay;
+
+// Server invia il comando di stop dall'utente al drone
+serverSendUserStopToDrone: server forward stopMissionFromUser to drone;
+//drone riceve il comando di arresto da server
+drone_MissionStop: drone serve stopMissionFromUser support=TCP [host="localhost" port=8030];
+
+
+// CMDDISPLAY
+
+// CmdDisplay invia a drone la velocità iniziale
+cmdSendSetSpeedToDrone: cmdDisplay ask setSpeed to drone;
+//drone riceve la velocità iniziale da cmdDisplay
+drone_InitialSpeed: drone accept setSpeed support=TCP [host="localhost" port=8030] ;
+
+// CmdDisplay invia a drone il comando di incremento velocità
+cmdSendIncSpeedToDrone: cmdDisplay forward incSpeed to drone;
+//drone riceve il comando di incremento velocità da cmdDisplay
+drone_IncSpeed: drone serve incSpeed support=TCP [host="localhost" port=8030];
+
+// CmdDisplay invia a drone il comando di decremento velocità
+cmdSendDecSpeedToDrone: cmdDisplay forward decSpeed to drone;
+//drone riceve il comando di decremento velocità da cmdDisplay
+drone_DecSpeed: drone serve decSpeed support=TCP [host="localhost" port=8030];
+
+// CmdDisplay invia a drone il comando di start Mission
+cmdSendStartToDrone: cmdDisplay forward startMission to drone;
+//drone riceve il comando di inizio missione da cmdDisplay
+drone_MissionStart: drone serve startMission support=TCP [host="localhost" port=8030];
+
+// CmdDisplay invia a gauge il comando di stop per scelta dell'utente
+cmdSendStopToGauge: cmdDisplay forward stopMissionFromUser to gaugeDisplay;
+
+// CmdDisplay invia a server il comando di stop per scelta dell'utente
+cmdSendStopToServer: cmdDisplay forward stopMissionFromUser to server;
+
+// CmdDisplay riceve la notifica di stop per fuel sotto il limite da server
+cmdReceiveFuelStop: cmdDisplay serve fuelStopMission;
+
+
+
+// GAUGE
+
+// GaugeDisplay riceve lo stato attuale del drone dal server
+gaugeReceiveDroneStatus: gaugeDisplay serve droneActualData;
+
+// GaugeDisplay riceve da cmdDisplay stop per scelta dell'utente
+gaugeReceiveStop: gaugeDisplay serve stopMissionFromUser;
+
+// GaugeDisplay riceve da Server stop per fuel
+gaugeReceiveFuelStop: gaugeDisplay serve fuelStopMission;
+
+//Behavior comandDisplay
+/*
+ * 	cmdDisplay si occupa di interfacciarsi con l'utente e ricevere l'input. In base ai comandi ricevuti comunicherà
+ * 	con drone.
+ * 	Riceve da server la notifica di stop della missione nel caso di carburante inferiore al livello minimo.
+ * 	Invia stop per scelta dell'utente a Gauge e Server
+ */
+BehaviorOf cmdDisplay{
+	
+	//variabili velocità corrente, incremento,decremento e velocità iniziale
+	var model.interfaces.messages.data.IStatusElement 			   currentSpeed
+	var model.interfaces.messages.operativeUnit.IInitialSpeed       setSpeed	
+	var model.interfaces.messages.common.ICommon					   commonCmdMessages
+	
+	//start
+	//var model.implementations.messages.operativeUnit
+	//stop
+	//var model.implementations.messages.operativeUnit
+	state cmdStart initial onException cmdError
+		showMsg("=== CMDDISPLAY ONLINE ===")		
+		set commonCmdMessages = call model.implementations.messages.common.Common.createObject();		
+		goToState cmdReady
+	endstate
+	
+	//cmdDisplay si pone in attesa di un messaggio di stop ricevuto dal server per carburante sotto la soglia minima
+	state cmdReady onException cmdError		
+		onMessage? fuelStopMission goToState cmdStop
+	endstate
+	
+	//cmdDisplay invia la velocità iniziale al drone
+	state cmdSetSpeedState onException cmdError
+		showMsg("invio velocità settata al drone")		
+		//deve inviare il messaggio al drone
+		doOutIn cmdSendSetSpeedToDrone(call model.implementations.messages.operativeUnit.InitialSpeed.createMessage(currentSpeed))
+	 	goToState cmdReceiveAck
+	endstate
+	
+	// Inviata la velocità iniziale al drone mi pongo in attesa della conferma da parte di esso
+	state cmdReceiveAck onException cmdError	
+		call curAcquireOneReply.acquireReply()
+		showMsg("ACK RICEVUTO")
+		goToState cmdReady
+	endstate
+	
+	// cmdDisplay invia al drone il comando di start da parte dell'utente
+	state cmdStartState onException cmdError
+		showMsg("comando di avvio al drone")
+		doOut cmdSendStartToDrone(call commonCmdMessages.start())
+		goToState cmdReady
+	endstate
+	
+	//incremento
+	state cmdIncSpeedState onException cmdError
+		showMsg("incremento velocità")		
+		doOut cmdSendIncSpeedToDrone(call model.implementations.messages.operativeUnit.IncSpeed.createMessage())		
+		showMsg("comando incremento velocità")
+		goToState cmdReady
+	endstate
+	
+	//dec
+	state cmdDecSpeedState onException cmdError
+		showMsg("decremento velocità")		
+		doOut cmdSendDecSpeedToDrone(call model.implementations.messages.operativeUnit.DecSpeed.createMessage()) 
+		showMsg("comando decremento velocità inviato")
+		goToState cmdReady
+	endstate
+	
+	// Stato in cui gestiamo lo stop del drone da parte dell'utente
+	state cmdUserStop onException cmdError
+		showMsg("==== Command Display User STOP ====")		
+		doOut cmdSendStopToGauge(call commonCmdMessages.stop())
+		doOut cmdSendStopToServer(call commonCmdMessages.stop())		
+		goToState cmdStop
+	endstate
+	
+	state cmdStop onException cmdError
+		showMsg("==== Command Display STOP ====")
+		transitToEnd
+	endstate
+	
+	state cmdError
+		showMsg("Errore cmdDisplay: " + code.curException)
+		goToState cmdStop
+	endstate
+} 
+
+/*
+ * 	GaugeDisplay si occupa di mostrare i valori dello stato del drone agli utenti della centrale operativa.
+ * 	Riceve da server lo stato attuale del drone e aggiorna di conseguenza la GUI.
+ * 	Riceve da Command Display lo stop della missione da parte dell'utente.
+ * 	Riceve da Server lo stop della mission nel caso il livello del carburante sia sotto una soglia minima
+ */
+BehaviorOf gaugeDisplay{
+	
+	var model.interfaces.messages.data.IStatus			droneStatus
+			
+	action void	updateGUI(model.interfaces.messages.data.IStatus droneStatus)
+	action void stopGUI()
+	
+	
+	
+	state gaugeStart initial onException gaugeError
+		showMsg("==== GAUGE ONLINE ====")
+		
+		goToState gaugeCheckCommands
+	endstate
+	
+	state gaugeCheckCommands onException gaugeError		
+		onMessage droneActualData transitTo gaugeReceiveDroneData
+		onMessage fuelStopMission transitTo gaugeFuelStop
+		onMessage stopMissionFromUser transitTo gaugeUserStop
+	endstate
+	
+	/*
+	 * 	Gauge riceve lo stato del drone da parte del server e aggiorna il display dell'utente
+	 */
+	state gaugeReceiveDroneData onException gaugeError
+		showMsg("=== Ricevuto stato del drone ===")
+		// Ricevo lo stato attuale del drone da server
+		set droneStatus = call model.implementations.messages.data.Status.readMessage(code.curInputMsgContent)
+			
+		// Aggiorno la GUI
+		call updateGUI(droneStatus)
+
+		showMsg("=== Aggiornata l'interfaccia ===")
+		
+		goToState gaugeCheckCommands
+	endstate
+	
+	/*
+	 *  Gauge riceve il comando di stop da cmdDisplay per scelta dell'utente
+	 */
+	state gaugeFuelStop onException gaugeError
+		showMsg("Gauge riceve stop da parte dell'utente")
+		goToState gaugeStop
+	endstate
+	
+	state gaugeUserStop onException gaugeError
+		showMsg("Gauge riceve stop da parte dell'utente")
+		goToState gaugeStop
+	endstate
+	
+	state gaugeStop onException gaugeError
+		showMsg("=== GAUGE OFFLINE ===")
+		call stopGUI()
+		transitToEnd
+	endstate
+	
+	state gaugeError
+		showMsg("Errore nel Gauge Display!")
+		goToState gaugeStop
+	endstate
+}
+
+/*
+ * 	Si occupa di ricevere lo stato e le foto del drone, e  di comunicarle a Gauge Display.
+ * 	Riceve da drone il comando di stop da parte del drone nel caso di fuel sotto la soglia minima
+ * 	e lo comunica a Command Display e Gauge Display.
+ * 	Riceve da Command Display il comando di stop da parte dell'utente e lo comunica al drone.
+ */
+BehaviorOf server{
+	
+	var model.interfaces.messages.data.IPacket			packet	
+	var model.interfaces.messages.data.IPhoto			packetPhoto
+	var	String											myIP
+	var String											photoName
+	
+	var model.interfaces.messages.common.ICommon			commonMessages
+	var int actual
+	
+	action void				createDatabase()
+	action void				addActualMissionRecord()
+	action void				addMissionStatus(model.interfaces.messages.data.IPacket packetStatus)
+	action String			getOwnIPAddress()
+	action void				receivePhoto(String photoName)
+	
+	/*
+	 * 	Viene creato il database e le relative tabelle se non esistono già.
+	 * 	Viene aggiunto un record nella tabella per la missione appena cominciata.
+	 */
+	state serverStart initial onException serverError
+		showMsg("=== SERVER ONLINE ===")
+
+		set myIP = call getOwnIPAddress()
+		
+		set commonMessages = call model.implementations.messages.common.Common.createObject();
+		
+		goToState serverReady
+	endstate
+	
+	state serverReady onException serverError
+		onMessage droneActualData transitTo serverInitDatabase	
+		onMessage stopMissionFromUser transitTo serverReceiveUserStop
+		onMessage fuelStopMission transitTo 	serverReceiveFuelStop
+	endstate
+	
+	state serverInitDatabase onException serverError
+		call createDatabase()
+		showMsg("=== Database created ===")
+		showMsg("=== Actual mission: " + actual + " ===")
+		call addActualMissionRecord()
+		showMsg("=== Actual mission ID: " + actual + " ===")
+		showMsg("=== Aggiunto record per la missione attuale ===")
+		
+		goToState serverReceiveDroneData
+	endstate
+	
+	state serverCheckCommands onException serverError
+		showMsg("Server checking for incoming messages")
+		
+		onMessage droneActualData transitTo 	serverReceiveDroneData
+		onMessage stopMissionFromUser transitTo serverReceiveUserStop
+		onMessage fuelStopMission transitTo 	serverReceiveFuelStop
+		
+	endstate
+	
+	/*
+	 * 	Server riceve lo stato e l'id della photo attuale del drone e invia lo stato a GaugeDisplay
+	 */
+	state serverReceiveDroneData onException serverError
+		showMsg("Server received drone actual status")
+		
+		set packet = call model.implementations.messages.data.Packet.readMessage(code.curInputMsgContent)
+		
+		call addMissionStatus(packet)
+		showMsg("=== Aggiunto stato drone ===")
+		doOut serverSendDroneStatusToGauge(call model.implementations.messages.data.Status.createMessage(call packet.getStatus()))
+		showMsg("=== Dati inviati a Gauge ===")
+		goToState serverRequestPhoto
+	endstate
+	
+	state serverRequestPhoto onException serverReceivingError
+		
+		doOut serverSendOpenStreamRequest(myIP)
+		showMsg("=== Inviata richiesta apertura stream ===")
+		set packetPhoto = call packet.getPhoto()
+		set photoName = call packetPhoto.getPhotoId()
+		call receivePhoto(photoName)
+		showMsg("=== Foto ricevuta ===")
+		goToState serverCheckCommands
+	endstate
+	
+	/*
+	 * 	Nel caso il server riceva da ComandDisplay lo stop da parte dell'utente.
+	 * 	Deve comunicare lo stop al drone
+	 */
+	state serverReceiveUserStop onException serverError
+		
+		doOut serverSendUserStopToDrone(call commonMessages.stop())
+		
+		goToState serverStop
+	endstate
+	
+	/*
+	 * 	Server riceve il comando di stop da parte del drone per carburante sotto la soglia minima.
+	 * 	Invia il comando a CmdDisplay e GaugeDisplay
+	 */
+	state serverReceiveFuelStop onException serverError
+	
+		doOut serverSendFuelStopToCmd(call commonMessages.stop())
+		doOut serverSendFuelStopToGauge(call commonMessages.stop())
+		
+		goToState serverStop
+	endstate
+	
+	
+	state serverStop onException serverError
+		showMsg("==== SERVER OFFLINE ====")
+		transitToEnd
+	endstate
+	
+	state serverError
+		showMsg("Errore server: " + code.curException)
+		goToState serverStop
+	endstate
+	
+	state serverReceivingError
+		showMsg("Errore nella ricezione della foto.")
+		
+		goToState serverCheckCommands
+	endstate
+	
+}

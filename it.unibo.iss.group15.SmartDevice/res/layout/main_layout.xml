@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+android:id="@+id/main_layout"
+android:orientation="vertical"
+android:layout_width="fill_parent"
+android:layout_height="wrap_content"
+>
+
+<TextView
+	android:id="@+id/txtTitle"
+	android:layout_width="fill_parent"
+	android:layout_height="wrap_content"
+	android:text="Drone Mission"
+	android:textStyle="italic"
+	android:textSize="9pt"
+	
+	android:background="@color/black"
+	android:textColor="@color/white"
+/>
+<Button 
+	android:id="@+id/btnWait"
+	android:layout_width="fill_parent"
+	android:layout_height="wrap_content"
+	android:text="Wait for a drone..."
+	android:textStyle="italic"
+/>
+<ScrollView 
+	android:id="@+id/a_main_Scroll"
+	android:layout_width="fill_parent"
+	android:layout_height="100pt"
+	android:layout_weight="0.0"
+	>
+	<TextView
+		android:id="@+id/output"
+		android:layout_width="fill_parent"
+		android:layout_height="wrap_content"
+		android:text=""
+		android:textStyle="italic"
+		android:textSize="6pt"
+		
+		android:background="@color/red"
+		android:textColor="@color/black"
+	/>
+</ScrollView>
+</LinearLayout>

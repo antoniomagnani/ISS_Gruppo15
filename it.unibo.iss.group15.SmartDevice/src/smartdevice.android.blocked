@@ -1,0 +1,128 @@
+AndroidSystem smartDevice
+avd 18 permissions INTERNET 
+package it.unibo.android.smartDevice
+
+action waitDrone category "android.intent.category.DEFAULT"
+
+//Attività di avvio con attesa di un messaggio di start e successiva notifica all'utente
+Activity MainActivity launchable
+	action waitDrone
+	useLayout main_layout;
+	
+//Schermata utilizzata durante una missione: ricezione messaggi e aggiornamento parametri
+Activity DashboardActivity
+	useLayout dashboard_layout;
+	
+//Edit dei layout tramite XML (margin, fragment, ecc.)
+	<Layout> name main_layout as 
+	<LinearLayout> main_layout
+		orientation VERTICAL
+		width FILL_PARENT
+		height WRAP_CONTENT
+		//ImageView aggiunta in codice
+		<TextView> txtTitle
+			width FILL_PARENT
+			height WRAP_CONTENT
+			text "Drone Mission"
+			textStyle ITALIC
+			size 9
+			background BLACK
+			textColor WHITE
+		</TextView>	 
+		<Button> btnWait
+			width FILL_PARENT
+			height WRAP_CONTENT
+			text "Wait for a drone..."
+			onClickDoAction waitDrone
+		</Button>
+		//a_main_scroll mostra le azioni nell'applicazione (si veda:
+		//http://edu222.deis.unibo.it/ANIS1213/CorsoIS1213CELM/target/site/pdf/android/AndroidAAASLIntro2013.pdf)
+		<ScrollView> a_main_Scroll 
+			width FILL_PARENT
+			height 100
+			weight 0.0
+			<TextView> output
+				width FILL_PARENT
+				height WRAP_CONTENT
+				text ""
+				textStyle ITALIC
+				size 6
+				background RED
+				textColor BLACK
+				useOutputForActivity MainActivity
+			</TextView>
+		</ScrollView>
+	</LinearLayout>
+</Layout>
+
+	<Layout> name dashboard_layout as 
+	<TableLayout> dashboard_layout
+		width FILL_PARENT
+		height FILL_PARENT
+		stretchColumns 1
+			<TableRow> rowSpeedText
+			width WRAP_CONTENT
+			height  WRAP_CONTENT
+				<TextView> speedTxt
+						width WRAP_CONTENT
+						height WRAP_CONTENT
+						text "Speed: 0 km/h"
+						textStyle BOLD
+						size 6
+						textColor WHITE
+				</TextView>
+			</TableRow>
+			
+			//ProgressBar speed aggiunta tramite xml
+
+			<TableRow> rowFuelDistanceTxt
+			width FILL_PARENT
+			height WRAP_CONTENT
+				<TextView> fuelTxt
+						width WRAP_CONTENT
+						height WRAP_CONTENT
+						text "Fuel: 0 L"
+						textStyle BOLD
+						size 6
+						textColor WHITE
+				</TextView>
+				<TextView> distanceTxt
+						width WRAP_CONTENT
+						height WRAP_CONTENT
+						text "Distance: 0 m"
+						textStyle BOLD
+						size 6
+						textColor WHITE
+				</TextView>
+			</TableRow>
+			
+			//ProgressBar fuel aggiunta tramite xml
+			
+			<TableRow> rowPositionAltitude
+			width FILL_PARENT
+			height WRAP_CONTENT
+				<TextView> positionTxt
+					width WRAP_CONTENT
+					height WRAP_CONTENT
+					text "Position: -° -°"
+					textStyle BOLD
+					size 6
+					textColor WHITE
+				</TextView>
+				<TextView> altitudeTxt
+					width WRAP_CONTENT
+					height WRAP_CONTENT
+					text "Altitude: 10 m" //altitudine iniziale (da specifiche)
+					textStyle BOLD
+					size 6
+					textColor WHITE
+				</TextView>
+			</TableRow>		
+			
+			//MapFragment aggiunto tramite XML, EDIT MANIFEST		
+				
+	</TableLayout>					
+	</Layout>
+		
+		
+	

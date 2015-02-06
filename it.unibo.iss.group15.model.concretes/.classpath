@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<classpath>
+	<classpathentry kind="src" path="src"/>
+	<classpathentry kind="con" path="org.eclipse.jdt.launching.JRE_CONTAINER/org.eclipse.jdt.internal.debug.ui.launcher.StandardVMType/JavaSE-1.7"/>
+	<classpathentry combineaccessrules="false" kind="src" path="/it.unibo.iss.group15.model.interfaces"/>
+	<classpathentry kind="lib" path="libs/it.unibo.envBaseAwt_1.6.6.jar"/>
+	<classpathentry kind="lib" path="libs/it.unibo.interfaces_1.6.12.jar"/>
+	<classpathentry kind="lib" path="libs/it.unibo.tuprolog_1.0.1.jar"/>
+	<classpathentry kind="lib" path="libs/org.eclipse.xtext.xbase.lib_2.2.1.v201112130541.jar"/>
+	<classpathentry kind="lib" path="libs/SteelSeries-3.9.9.jar"/>
+	<classpathentry kind="lib" path="libs/swingx-ws-1.0.jar"/>
+	<classpathentry kind="lib" path="libs/swingx-core-1.6.2-2.jar"/>
+	<classpathentry kind="lib" path="libs/trident-1.3.jar"/>
+	<classpathentry kind="lib" path="libs/mysql-connector-java-5.1.29-bin.jar"/>
+	<classpathentry kind="output" path="bin"/>
+</classpath>

@@ -1,0 +1,2 @@
+activity MainActivity
+activity DashboardActivity

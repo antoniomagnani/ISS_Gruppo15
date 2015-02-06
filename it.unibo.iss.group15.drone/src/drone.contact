@@ -1,0 +1,420 @@
+ContactSystem DroneSystem spaceUpdater [host="localhost" port=8070];
+
+Context droneCtx -o;
+
+//==== SUBJECTS ====
+
+Subject drone			context droneCtx -w;
+Subject droneSensor		context droneCtx -w;
+
+Subject cmdDisplay external;
+Subject server external;
+Subject smartDevices external;
+
+// ==== MESSAGES ====
+
+
+Invitation setSpeed;
+Dispatch incSpeed;
+Dispatch decSpeed;
+
+Dispatch startMission;
+Dispatch stopMissionForFuel;
+Dispatch stopMissionFromUser;
+
+//Comunicazione con il server 
+Dispatch droneData;
+Dispatch droneActualData;
+Dispatch openStreamRequest;
+Dispatch fuelStopMission;
+
+//messaggi scambiato tra il drone e droneSensor
+Dispatch incSensorSpeed;
+Dispatch decSensorSpeed;
+Dispatch setSensorSpeed;
+Dispatch startSensorMission;
+Dispatch stopSensorMission; 
+
+//messaggi scambiati tra drone e gli smart device
+Signal smartMissionStart;
+Signal smartMissionUserStop;
+Signal smartMissionFuelStop;
+Signal smartActualStatus;
+
+//richiesta dal drone al droneSensor dei dati attuali
+Request droneStatus;
+
+//messaggi 
+
+//drone riceve la velocità iniziale da cmdDisplay
+drone_InitialSpeed: drone accept setSpeed support=TCP [host="localhost" port=8030] ;
+
+//drone riceve il comando di inizio missione da cmdDisplay
+drone_MissionStart: drone serve startMission support=TCP [host="localhost" port=8030];
+
+//drone riceve il comando di incremento velocità da cmdDisplay
+drone_IncSpeed: drone serve incSpeed support=TCP [host="localhost" port=8030];
+
+//drone riceve il comando di decremento velocità da cmdDisplay
+drone_DecSpeed: drone serve decSpeed support=TCP [host="localhost" port=8030];
+
+//drone riceve il comando di arresto da server per scelta dell'utente
+drone_MissionStop: drone serve stopMissionFromUser support=TCP [host="localhost" port=8030];
+
+//drone invia a droneSensor velocità iniziale
+drone_SendSpeed: drone forward setSensorSpeed to droneSensor;
+
+//drone invia agli smart device il comando di inizio missione
+drone_MissionStartToSmart: drone emit smartMissionStart;
+
+//drone invia agli smart device il comando di fine missione
+drone_MissionStopToSmart: drone emit smartMissionUserStop;
+
+//drone invia agli smart device lo stato attuale del drone
+drone_ActualStatusToSmart: drone emit smartActualStatus;
+
+//drone invia alla centrale operativa lo stato attuale del drone e il nome della foto
+drone_SendActualDataToServer: drone forward droneActualData to server;
+//	Server riceve lo stato attuale e il nome della foto dal drone
+serverReceiveDroneStatus: server serve droneActualData support=TCP[host="localhost" port=8010];
+
+//drone invia il comando di stop al server nel caso di carburante sotto la soglia minima
+drone_MissionFuelStopToServer: drone forward fuelStopMission to server;
+//	Server riceve il comando di stop per fuel sotto il livello minimo dal drone
+serverReceiveFuelStop: server serve fuelStopMission support=TCP[host="localhost" port=8010];
+
+//drone invia il comando di stop agli smart devices per il carburante sotto una soglia minima
+drone_MissionFuelStopToSmart: drone emit smartMissionFuelStop;
+
+//drone invia a droneSensor incremento velocità
+drone_IncSpeedSensor: drone forward incSensorSpeed to droneSensor;
+
+//drone invia a droneSensor decremento velocità
+drone_DecSpeedSensor: drone forward decSensorSpeed to droneSensor;
+
+//drone invia a droneSensor avvio missione
+drone_MissionStartSensor: drone forward startSensorMission to droneSensor;
+
+//drone invia a droneSensor stop missione
+drone_MissionStopSensor: drone forward stopSensorMission to droneSensor;
+
+//drone richiede stato attuale al dronesensor
+drone_ActualStatus: drone demand droneStatus to droneSensor;
+
+//drone riceve la richiesta di apertura di uno stream da parte della centrale operativa
+//al fine di inviare la foto
+drone_PhotoStreamRequest: drone serve openStreamRequest	support=TCP [host="localhost" port=8090];
+
+//droneSensor riceve da drone la velocità iniziale
+droneSensor_InitialSpeed: droneSensor serve setSensorSpeed;
+
+//droneSensor riceve da drone incremento velocità
+droneSensor_IncSpeed: droneSensor serve incSensorSpeed;
+
+//droneSensor riceve da drone decremento velocità
+droneSensor_DecSpeed: droneSensor serve decSensorSpeed; 
+
+//droneSensor riceve da drone avvio missione
+droneSensor_MissionStart: droneSensor serve startSensorMission;
+
+//droneSensor riceve da drone stop missione
+droneSensor_MissionStop: droneSensor serve stopSensorMission;
+ 
+//droneSensor riceve richiesta stato attuale
+droneSensor_ActualStatus: droneSensor grant droneStatus;
+
+// 3.0 BEHAVIOUR
+
+// 3.1 drone behaviour
+
+BehaviorOf drone {
+	
+	var model.interfaces.messages.operativeUnit.IInitialSpeed 	initialSpeedData
+	var model.interfaces.messages.data.IStatusElement 			currentSpeed
+	
+	var it.unibo.is.interfaces.IMessage			droneSensorResponse
+	var model.interfaces.messages.data.IStatus	currentStatus
+	var model.interfaces.messages.data.IPacket	currentPacket
+	
+	var model.interfaces.messages.common.ICommon	commonMessages
+	
+	var int		dtf
+	var String 	serverIP
+	var double	fuelValue
+	var double 	fuelMin
+	var model.interfaces.messages.data.IStatusElement	fuelActual
+	
+	// Metodo per impostare l'attesa di drone del tempo indicato
+	action void 									waitDTF(long waitTime)
+	action model.interfaces.messages.data.IPacket	createPacket()
+	action void										sendPhoto()
+	
+	//stato iniziale
+	state droneStart initial onException droneError
+		showMsg("=== Drone online ===");
+		set dtf = code.model.implementations.parameters.Parameters.DTF;
+		set commonMessages = call model.implementations.messages.common.Common.createObject();
+		set fuelMin = code.model.implementations.parameters.Parameters.minFuel
+		goToState waitSet
+	endstate
+	
+	//stato wait velocità iniziale
+	state waitSet onException droneError
+		showMsg("=== Attesa velocità iniziale ===")
+		onMessage setSpeed transitTo waitStart
+	endstate
+	
+	//stato wait, comando di start
+	state waitStart onException droneError
+		
+		//salvo messaggio e valore della velocità attuale
+		set initialSpeedData = call model.implementations.messages.operativeUnit.InitialSpeed.readMessage(code.curInputMsgContent)
+		set currentSpeed = call initialSpeedData.getSpeed()
+		showMsg("=== Velocità iniziale settata ===")
+		
+		onMessage startMission transitTo dronePreFlying
+		onMessage setSpeed transitTo waitStart
+	endstate
+	
+	// Drone:
+	// -	Comunica a droneSensor la velocità iniziale impostata
+	// - 	Comunica ai device mobili lo start della missione
+	state dronePreFlying onException droneError
+		showMsg("=== MISSION STARTED ===")
+	
+		//Comunico la velocità iniziale a droneSensor
+		doOut drone_SendSpeed(call model.implementations.messages.operativeUnit.InitialSpeed.createMessage(currentSpeed))
+
+		//Comunico ai device lo start
+		doOut drone_MissionStartToSmart(call commonMessages.start());
+		showMsg("=== Velocità iniziale inviata a droneSensor e ai device ===")
+		
+		goToState droneFlying		
+	endstate
+	
+	//	Il drone:
+	//	-	Attende per un tempo pari a DTF
+	//	-	Controlla se è stato inviato il messaggio per lo stop della missione
+	//	-	Chiede al droneSensor le informazioni e la foto
+	//	-	Comunica i dati ottenuti a gaugeDisplay e agli SmartDevice
+	//  - 	Controlla se vi sono messaggi da cmdDisplay
+	state droneFlying onException droneError
+		// Attendo DTF
+		call waitDTF(dtf)
+		showMsg("=== dtf elapsed ===")
+		// Controllo se è stato inviato un messaggio di stop della missione
+		onMessage? stopMissionFromUser goToState droneStop
+		
+		// Invia la richiesta al droneSensor per le informazioni
+		doOutIn drone_ActualStatus(call commonMessages.currentStatusMessage())
+		
+		// Aspetta la risposta alla richiesta appena effettuata
+		set droneSensorResponse = call curAcquireOneReply.acquireReply()
+		showMsg("=== Ricevuto stato attuale drone da droneSensor ===")
+		
+		// Leggo la risposta del droneSensor e ricavo i dati richiesti
+		set currentStatus = call model.implementations.messages.data.Status.readMessage(call droneSensorResponse.msgContent())
+		
+		// Invio delle informazioni agli SmartDevice
+		doOut drone_ActualStatusToSmart(call model.implementations.messages.data.Status.createMessage(currentStatus))
+		showMsg("=== Stato attuale inviato agli smart device ===")
+		// Creo un pacchetto con status e foto (nome) da inviare alla centrale operativa
+		set currentPacket = call  createPacket()
+		
+		doOut drone_SendActualDataToServer(call model.implementations.messages.data.Packet.createMessage(currentPacket))
+		showMsg("=== Inviato lo stato attuale al Server ===")
+		
+		goToState managePhotoConnection
+	endstate
+	
+	// Il drone si pone, dopo aver mandato il Packet all'unità operativa, in attesa di una richiesta per l'apertura
+	// di un canale di comunicazione attraverso il quale inviare la foto
+	state managePhotoConnection onException droneError
+		
+		doIn drone_PhotoStreamRequest()
+		set serverIP = code.curInputMsgContent
+		showMsg("=== Richiesta di apertura stream ricevuta dal Server: " + serverIP + " ===")
+		
+		call sendPhoto()
+		goToState droneCheckFuel
+	endstate
+	
+	state droneCheckFuel onException droneError
+		
+		set fuelActual = call currentStatus.getFuel()
+		set fuelValue = call fuelActual.getValue()
+
+		// Controllo fuel. Se low passo allo stop automatico
+		if{fuelValue <= fuelMin}{
+			goToState droneAutomaticStop
+		}
+		
+		// Se il carburante non è sotto la soglia minima, passo a controllare la presenza di messaggi da cmdDisplay
+		goToState droneCheckCommands
+	endstate
+	
+	// Una  volta che il drone ha inviato le informazioni e controllato il livello di carburante, passa a considerare
+	// eventuali comandi provenienti da cmdDisplay
+	state droneCheckCommands onException droneError
+		showMsg("=== Controllo comandi ricevuti dall'unità operativa ===")
+
+		onMessage? stopMissionFromUser goToState droneManageCommands // Da controllare 
+		onMessage? decSpeed goToState droneManageCommands
+		onMessage? incSpeed goToState droneManageCommands
+		
+		goToState droneFlying
+	endstate
+	
+	state droneManageCommands onException droneError
+	
+		onMessage stopMissionFromUser transitTo droneStop // Da controllare 
+		onMessage decSpeed transitTo droneDecSpeed
+		onMessage incSpeed transitTo droneIncSpeed
+	
+	endstate
+	
+	state droneDecSpeed onException droneError
+		showMsg("=== Decremento velocità ===")
+		doOut drone_DecSpeedSensor(call model.implementations.messages.operativeUnit.DecSpeed.createMessage())
+		goToState droneFlying
+	endstate
+	
+	state droneIncSpeed onException droneError
+		showMsg("=== Incremento velocità ===")
+		doOut drone_IncSpeedSensor(call model.implementations.messages.operativeUnit.IncSpeed.createMessage())
+		goToState droneFlying
+	endstate
+	
+	/*
+	 * 	Stato di arrivo nel caso il carburante scenda sotto la soglia minima.
+	 * 	Invia un messaggio di stop al server e agli smart devices
+	 */
+	state droneAutomaticStop
+		showMsg("=== CARBURANTE SOTTO LA SOGLIA MINIMA. ARRESTO MISSIONE ===")
+		doOut drone_MissionFuelStopToServer(call commonMessages.stop())
+		doOut drone_MissionStopSensor(call commonMessages.stop())
+		doOut drone_MissionFuelStopToSmart(call commonMessages.stop())
+		transitToEnd
+	endstate
+	
+	// Stato di arrivo se drone riceve un comando di stop
+	// Il drone:
+	//		- Invia il segnale di stop a droneSensor
+	//		- Invia il segnale di stop agli Smart Device
+	// TODO: Implementare controllo per stream e cazzi vari
+	//	
+	state droneStop
+		showMsg("=== RICEVUTO COMANDO DI FINE MISSIONE. ARRESTO ===")
+		// Invio segnale di stop al droneSensor
+		doOut drone_MissionStopSensor(call commonMessages.stop())
+		
+		// Invio segnale di stop agli Smart Device
+		doOut drone_MissionStopToSmart(call commonMessages.stop())
+		
+		transitToEnd
+	endstate
+	
+	state droneError
+		showMsg( "ERROR: " + code.curException)
+		
+		// Nel caso di eccezioni ritorna allo stato iniziale per evitare di interrompere l'esecuzione
+		// della missione in maniera inaspettata
+		
+		goToState droneStop
+	endstate
+	
+	
+}
+
+BehaviorOf droneSensor {
+	
+	//Variabili
+	var model.interfaces.messages.operativeUnit.IInitialSpeed	initialSensorSpeedData
+	var model.interfaces.messages.data.IStatusElement			currentSensorSpeed
+	var model.interfaces.messages.data.IStatus					currentStatusResponse
+	
+	var model.interfaces.messages.data.IPosition					position
+	//Actions
+	action void startMission(model.interfaces.messages.data.IStatusElement speed)
+	action void incSpeed()
+	action void decSpeed()
+	action model.interfaces.messages.data.IStatus prepareResponseStatus()
+	
+	state droneSensorStart initial onException droneSensorError
+		showMsg("=== DRONE SENSOR ONLINE ===")
+		goToState droneSensorWaitSet
+	endstate
+	
+	// Il droneSensor si pone in attesa della velocità iniziale da drone.
+	// La ricezione della velocità è interpretata anche come segnale di inizio missione
+	state droneSensorWaitSet onException droneSensorError
+		showMsg("=== Attesa della velocità iniziale ===")
+		
+		onMessage setSensorSpeed transitTo droneSensorSetSpeed
+	endstate
+	
+	//Viene salvato il messaggio e il valore della velocità iniziale
+	state droneSensorSetSpeed onException droneSensorError
+
+		set initialSensorSpeedData = call model.implementations.messages.operativeUnit.InitialSpeed.readMessage(code.curInputMsgContent)
+		set currentSensorSpeed = call initialSensorSpeedData.getSpeed()
+		showMsg("== Velocità ottenuta. Inizio missione ==")
+		
+		call startMission(currentSensorSpeed)
+
+		goToState droneSensorCheckCommands
+	endstate
+	
+	// Dopo aver fatto partire la missione, o dopo aver eseguito i comandi ricevuti
+	// il droneSenser si mette in attesa della ricezione di un comando:
+	//		- Stop missione
+	//		- Incremento velocità
+	//		- Decremento velocità
+	//		- Stato attuale dei sensori
+	state droneSensorCheckCommands onException droneSensorError
+	
+		onMessage stopSensorMission transitTo droneSensorStop
+		onMessage incSensorSpeed transitTo droneSensorIncSpeed
+		onMessage decSensorSpeed transitTo droneSensorDecSpeed
+		onMessage droneStatus transitTo droneSensorStatus
+	
+	endstate
+	
+	// droneSensor incrementa la propria velocità di una quantità DS
+	// Prima effettua un update dello stato dei sensori
+	state droneSensorIncSpeed onException droneSensorError
+	
+		call incSpeed()
+		showMsg("=== Velocità incrementata (" + code.curInputMsgContent + ")===")
+		
+		goToState droneSensorCheckCommands
+	endstate
+	
+	// droneSensor decrementa la propria velocità di una quantità DS
+	// Prima effettua un update dello stato dei sensori
+	state droneSensorDecSpeed onException droneSensorError
+		call decSpeed()
+		showMsg("=== Velocità decrementata ===")
+		goToState droneSensorCheckCommands
+	endstate
+	
+	state droneSensorStatus onException droneSensorStatus
+		set currentStatusResponse = call prepareResponseStatus()
+		showMsg("Lat iniziale: " + call position.getLatitude())
+		call curRequest.replyToCaller(call model.implementations.messages.data.Status.createMessage(currentStatusResponse))
+		showMsg("=== Stato attuale inviato a Drone ===")
+		goToState droneSensorCheckCommands
+	endstate
+	
+	state droneSensorStop onException droneSensorError
+		showMsg("==== Drone Sensor STOP ====")	
+		transitToEnd
+	endstate
+	
+	state droneSensorError
+		showMsg("Drone error: " + code.curException)
+		
+		goToState droneSensorStop
+	endstate
+}
+
