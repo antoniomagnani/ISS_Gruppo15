@@ -10,16 +10,10 @@ import java.net.UnknownHostException;
 import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.text.SimpleDateFormat;
-import java.util.AbstractMap;
-import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 import com.mysql.jdbc.Connection;
-import com.mysql.jdbc.Statement;
 
 import model.implementations.messages.data.PhotoSender;
 import model.implementations.parameters.DbData;
@@ -34,7 +28,6 @@ public class Server extends ServerSupport {
 	
 	private Properties 	prop; 
 	private String 		dbUrl;
-	private Connection 	conn;
 	private DbTool 		dbTool;
 	private int			actualMission;
 	private String		actualMissionName;

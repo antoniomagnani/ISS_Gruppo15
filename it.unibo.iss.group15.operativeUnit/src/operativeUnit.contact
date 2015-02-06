@@ -29,13 +29,6 @@ Dispatch decSpeed;
 //tipi messaggi relativi alla missione
 Dispatch startMission;
 
-//tipi messaggi utilizzati dal repository per info riguardanti foto stato e trasferimento foto
-//Dispatch sendPackage;
-//Dispatch sendPhoto;
-//tipi messaggi per comunicazione interna dei subject
-//Dispatch currentFuel;
-//Dispatch currentState;
-
 // ======= MESSAGES =======
 
 // SERVER
@@ -125,13 +118,10 @@ BehaviorOf cmdDisplay{
 	
 	//variabili velocità corrente, incremento,decremento e velocità iniziale
 	var model.interfaces.messages.data.IStatusElement 			   currentSpeed
-	var model.interfaces.messages.operativeUnit.IInitialSpeed       setSpeed	
-	var model.interfaces.messages.common.ICommon					   commonCmdMessages
+	var model.interfaces.messages.operativeUnit.IInitialSpeed      setSpeed	
+	var model.interfaces.messages.common.ICommon				   commonCmdMessages
 	
-	//start
-	//var model.implementations.messages.operativeUnit
-	//stop
-	//var model.implementations.messages.operativeUnit
+
 	state cmdStart initial onException cmdError
 		showMsg("=== CMDDISPLAY ONLINE ===")		
 		set commonCmdMessages = call model.implementations.messages.common.Common.createObject();		
@@ -165,7 +155,7 @@ BehaviorOf cmdDisplay{
 		goToState cmdReady
 	endstate
 	
-	//incremento
+	//inc
 	state cmdIncSpeedState onException cmdError
 		showMsg("incremento velocità")		
 		doOut cmdSendIncSpeedToDrone(call model.implementations.messages.operativeUnit.IncSpeed.createMessage())		
@@ -281,7 +271,7 @@ BehaviorOf server{
 	var	String											myIP
 	var String											photoName
 	
-	var model.interfaces.messages.common.ICommon			commonMessages
+	var model.interfaces.messages.common.ICommon		commonMessages
 	var int actual
 	
 	action void				createDatabase()
